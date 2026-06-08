@@ -1,22 +1,42 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { AppStep, MatchResult } from '@/lib/types';
 import { saveBolao } from '@/lib/supabase';
+import { usePersistentState, clearPersistedBolao } from '@/lib/usePersistentState';
 import LandingPage from '@/components/LandingPage';
 import GroupStage from '@/components/GroupStage';
 import KnockoutStage from '@/components/KnockoutStage';
 import Summary from '@/components/Summary';
 
+const STORAGE_KEYS = {
+  step: 'bolao2026:step',
+  name: 'bolao2026:name',
+  groups: 'bolao2026:groupResults',
+  knockout: 'bolao2026:knockoutResults',
+};
+
 export default function Home() {
-  const [step, setStep] = useState<AppStep>('landing');
-  const [name, setName] = useState('');
-  const [groupResults, setGroupResults] = useState<Record<string, MatchResult>>({});
-  const [knockoutResults, setKnockoutResults] = useState<Record<string, MatchResult>>({});
+  // Persisted to localStorage so progress survives reloads, closing the tab,
+  // and new deploys. `hydrated` tells us the saved state has been read.
+  const [step, setStep, hydrated] = usePersistentState<AppStep>(STORAGE_KEYS.step, 'landing');
+  const [name, setName] = usePersistentState<string>(STORAGE_KEYS.name, '');
+  const [groupResults, setGroupResults] = usePersistentState<Record<string, MatchResult>>(STORAGE_KEYS.groups, {});
+  const [knockoutResults, setKnockoutResults] = usePersistentState<Record<string, MatchResult>>(STORAGE_KEYS.knockout, {});
 
   const handleStart = (playerName: string) => {
     setName(playerName);
     setStep('groups');
+    window.scrollTo(0, 0);
+  };
+
+  const handleRestart = () => {
+    if (!window.confirm('Tem certeza? Isso vai apagar todos os seus palpites e começar do zero.')) return;
+    clearPersistedBolao(Object.values(STORAGE_KEYS));
+    setName('');
+    setGroupResults({});
+    setKnockoutResults({});
+    setStep('landing');
     window.scrollTo(0, 0);
   };
 
@@ -74,26 +94,45 @@ export default function Home() {
               {name}
             </span>
           </div>
-          <div className="flex gap-1">
-            {steps.map((s, i) => (
-              <div
-                key={s.key}
-                className="flex items-center gap-1 text-xs px-2 py-1 rounded"
-                style={{
-                  background: step === s.key ? 'var(--color-green-800)' : 'transparent',
-                  color: step === s.key ? 'var(--color-gold-400)' : '#506050',
-                  fontFamily: 'var(--font-heading)',
-                  fontWeight: step === s.key ? 700 : 400,
-                }}
-              >
-                {s.icon} <span className="hidden sm:inline">{s.label}</span>
-              </div>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1">
+              {steps.map((s) => (
+                <div
+                  key={s.key}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded"
+                  style={{
+                    background: step === s.key ? 'var(--color-green-800)' : 'transparent',
+                    color: step === s.key ? 'var(--color-gold-400)' : '#506050',
+                    fontFamily: 'var(--font-heading)',
+                    fontWeight: step === s.key ? 700 : 400,
+                  }}
+                >
+                  {s.icon} <span className="hidden sm:inline">{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={handleRestart}
+              title="Começar de novo (apaga tudo)"
+              className="text-xs px-2 py-1 rounded"
+              style={{ background: 'var(--color-card-bg)', color: '#a08070', border: '1px solid var(--color-card-border)' }}
+            >
+              ↺ <span className="hidden sm:inline">Recomeçar</span>
+            </button>
           </div>
         </div>
       </div>
     );
   };
+
+  // Avoid flashing the landing page before saved progress is restored.
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-4xl animate-pulse">⚽</div>
+      </div>
+    );
+  }
 
   return (
     <>
