@@ -117,22 +117,84 @@ export function getGroupPosition(
   return standings[position].teamId;
 }
 
-// Resolve which third-placed team fills a bracket slot
-// This is simplified - in reality FIFA has a complex table
-export function resolveThirdPlaceSlot(
-  slotGroups: string, // e.g. "C_D_E"
+// Resolve ALL eight 3rd-place bracket slots at once, guaranteeing each
+// qualified third-placed team is assigned to EXACTLY ONE slot.
+//
+// `slotGroupSets[i]` lists the groups allowed to feed slot i (FIFA's table
+// determines which combination of qualifying thirds maps to which slots).
+// We assign greedily: process slots in order, and for each slot pick the
+// best-ranked still-unassigned third whose group is permitted. This prevents
+// the duplicate-team bug where the same third filled multiple slots.
+export function resolveThirdPlaceSlots(
+  slotGroupSets: string[],
   allStandings: Record<string, GroupStanding[]>
-): string | null {
-  const possibleGroups = slotGroups.split('_');
+): (string | null)[] {
   const qualifiedThirds = getThirdPlacedTeams(allStandings).slice(0, 8);
-  
-  // Find the best qualified third from the possible groups
-  for (const third of qualifiedThirds) {
-    if (possibleGroups.includes(third.group)) {
-      return third.teamId;
+  const used = new Set<string>();
+  const result: (string | null)[] = [];
+
+  for (const slotGroups of slotGroupSets) {
+    const possibleGroups = slotGroups.split('_');
+    const match = qualifiedThirds.find(
+      t => !used.has(t.teamId) && possibleGroups.includes(t.group)
+    );
+    if (match) {
+      used.add(match.teamId);
+      result.push(match.teamId);
+    } else {
+      result.push(null);
     }
   }
-  return null;
+
+  // Safety net: if some slot found no permitted group (e.g. that group's third
+  // didn't qualify), backfill with any remaining unassigned qualified third so
+  // all 8 teams are placed and none is left out of the bracket.
+  for (let i = 0; i < result.length; i++) {
+    if (result[i] === null) {
+      const leftover = qualifiedThirds.find(t => !used.has(t.teamId));
+      if (leftover) {
+        used.add(leftover.teamId);
+        result[i] = leftover.teamId;
+      }
+    }
+  }
+
+  return result;
+}
+
+// Single source of truth for the Round-of-32 pairings.
+// Returns 16 matches with home/away team ids resolved from the group standings.
+// Every one of the 32 qualified teams appears EXACTLY ONCE (verified by tests).
+// Both KnockoutStage and Summary must use this — do NOT inline a second copy,
+// or the two views will disagree and the duplicate-team bug can creep back.
+export function resolveRound32(
+  allStandings: Record<string, GroupStanding[]>
+): { id: string; home: string | null; away: string | null }[] {
+  const t = resolveThirdPlaceSlots(
+    ['A_B_C_D', 'A_B_C_F', 'D_E_F', 'E_F_G_I', 'E_H_I_J', 'I_J_K_L', 'H_J_K_L', 'B_E_H_K'],
+    allStandings
+  );
+  const pos = (g: string, p: number) => getGroupPosition(g, p, allStandings);
+  return [
+    // Left half
+    { id: 'R32_1', home: pos('A', 0), away: t[0] },
+    { id: 'R32_2', home: pos('E', 1), away: pos('H', 1) },
+    { id: 'R32_3', home: pos('F', 0), away: pos('C', 1) },
+    { id: 'R32_4', home: pos('C', 0), away: t[1] },
+    { id: 'R32_5', home: pos('I', 0), away: pos('B', 1) },
+    { id: 'R32_6', home: pos('E', 0), away: t[2] },
+    { id: 'R32_7', home: pos('L', 0), away: pos('D', 1) },
+    { id: 'R32_8', home: pos('G', 0), away: t[3] },
+    // Right half
+    { id: 'R32_9', home: pos('D', 0), away: t[4] },
+    { id: 'R32_10', home: pos('J', 1), away: pos('L', 1) },
+    { id: 'R32_11', home: pos('K', 0), away: pos('I', 1) },
+    { id: 'R32_12', home: pos('H', 0), away: t[5] },
+    { id: 'R32_13', home: pos('B', 0), away: pos('G', 1) },
+    { id: 'R32_14', home: pos('J', 0), away: t[6] },
+    { id: 'R32_15', home: pos('K', 1), away: pos('F', 1) },
+    { id: 'R32_16', home: pos('A', 1), away: t[7] },
+  ];
 }
 
 // Get winner of a knockout match

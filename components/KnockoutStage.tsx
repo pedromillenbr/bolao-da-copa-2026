@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { teams } from '@/lib/data';
 import {
   getAllGroupStandings,
-  getGroupPosition,
-  resolveThirdPlaceSlot,
+  resolveRound32,
   getTeamFlag,
   getTeamName,
 } from '@/lib/logic';
@@ -42,28 +40,8 @@ export default function KnockoutStage({
 
   const allStandings = useMemo(() => getAllGroupStandings(groupResults), [groupResults]);
 
-  // Resolve teams for Round of 32 based on group standings
-  const resolveR32Teams = useMemo(() => {
-    const r32: { id: string; home: string | null; away: string | null }[] = [
-      { id: 'R32_1', home: getGroupPosition('A', 0, allStandings), away: resolveThirdPlaceSlot('C_D_E', allStandings) },
-      { id: 'R32_2', home: getGroupPosition('C', 1, allStandings), away: getGroupPosition('F', 1, allStandings) },
-      { id: 'R32_3', home: getGroupPosition('B', 0, allStandings), away: resolveThirdPlaceSlot('A_D_F', allStandings) },
-      { id: 'R32_4', home: getGroupPosition('A', 1, allStandings), away: getGroupPosition('D', 1, allStandings) },
-      { id: 'R32_5', home: getGroupPosition('E', 0, allStandings), away: resolveThirdPlaceSlot('B_G_H', allStandings) },
-      { id: 'R32_6', home: getGroupPosition('G', 1, allStandings), away: getGroupPosition('H', 1, allStandings) },
-      { id: 'R32_7', home: getGroupPosition('F', 0, allStandings), away: resolveThirdPlaceSlot('A_B_C', allStandings) },
-      { id: 'R32_8', home: getGroupPosition('E', 1, allStandings), away: getGroupPosition('B', 1, allStandings) },
-      { id: 'R32_9', home: getGroupPosition('G', 0, allStandings), away: resolveThirdPlaceSlot('I_J_K', allStandings) },
-      { id: 'R32_10', home: getGroupPosition('I', 1, allStandings), away: getGroupPosition('L', 1, allStandings) },
-      { id: 'R32_11', home: getGroupPosition('H', 0, allStandings), away: resolveThirdPlaceSlot('F_J_L', allStandings) },
-      { id: 'R32_12', home: getGroupPosition('K', 1, allStandings), away: getGroupPosition('J', 1, allStandings) },
-      { id: 'R32_13', home: getGroupPosition('I', 0, allStandings), away: resolveThirdPlaceSlot('G_H_L', allStandings) },
-      { id: 'R32_14', home: getGroupPosition('L', 0, allStandings), away: getGroupPosition('K', 0, allStandings) },
-      { id: 'R32_15', home: getGroupPosition('J', 0, allStandings), away: resolveThirdPlaceSlot('E_F_I', allStandings) },
-      { id: 'R32_16', home: getGroupPosition('K', 0, allStandings), away: getGroupPosition('I', 1, allStandings) },
-    ];
-    return r32;
-  }, [allStandings]);
+  // Resolve teams for Round of 32 — shared single source of truth (see logic.ts).
+  const resolveR32Teams = useMemo(() => resolveRound32(allStandings), [allStandings]);
 
   // Get winner of a knockout match
   const getWinner = (matchId: string, homeTeam: string | null, awayTeam: string | null): string | null => {

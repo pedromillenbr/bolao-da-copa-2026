@@ -161,28 +161,33 @@ export const getMatchesByGroup = (group: string): GroupMatch[] => {
   return groupMatches.filter(m => m.group === group);
 };
 
-// Knockout bracket structure for FIFA 2026
-// The bracket follows the official FIFA structure
+// Knockout bracket structure for FIFA 2026.
+// IMPORTANT: every one of the 32 qualified teams (12 group winners, 12
+// runners-up, 8 best thirds) must appear EXACTLY ONCE. This mirrors the
+// mapping resolved at runtime in components/KnockoutStage.tsx — keep the two
+// in sync. The "3rd" sources list the groups eligible to feed that slot; the
+// actual third assigned is resolved with resolveThirdPlaceSlots (which never
+// reuses a team).
 // Round of 32: 16 matches
 export const round32Structure = [
-  // Left bracket
-  { id: 'R32_1', homeSource: '1A', awaySource: '3C_D_E', position: 1 },
-  { id: 'R32_2', homeSource: '2C', awaySource: '2F', position: 2 },
-  { id: 'R32_3', homeSource: '1B', awaySource: '3A_D_F', position: 3 },
-  { id: 'R32_4', homeSource: '2A', awaySource: '2D', position: 4 },
-  { id: 'R32_5', homeSource: '1E', awaySource: '3B_G_H', position: 5 },
-  { id: 'R32_6', homeSource: '2G', awaySource: '2H', position: 6 },
-  { id: 'R32_7', homeSource: '1F', awaySource: '3A_B_C', position: 7 },
-  { id: 'R32_8', homeSource: '2E', awaySource: '2B', position: 8 },
-  // Right bracket
-  { id: 'R32_9', homeSource: '1G', awaySource: '3I_J_K', position: 9 },
-  { id: 'R32_10', homeSource: '2I', awaySource: '2L', position: 10 },
-  { id: 'R32_11', homeSource: '1H', awaySource: '3F_J_L', position: 11 },
-  { id: 'R32_12', homeSource: '2K', awaySource: '2J', position: 12 },
-  { id: 'R32_13', homeSource: '1I', awaySource: '3G_H_L', position: 13 },
-  { id: 'R32_14', homeSource: '2L', awaySource: '2K', position: 14 },
-  { id: 'R32_15', homeSource: '1J', awaySource: '3E_F_I', position: 15 },
-  { id: 'R32_16', homeSource: '1K', awaySource: '2I', position: 16 },
+  // Left half
+  { id: 'R32_1', homeSource: '1A', awaySource: '3A_B_C_D', position: 1 },
+  { id: 'R32_2', homeSource: '2E', awaySource: '2H', position: 2 },
+  { id: 'R32_3', homeSource: '1F', awaySource: '2C', position: 3 },
+  { id: 'R32_4', homeSource: '1C', awaySource: '3A_B_C_F', position: 4 },
+  { id: 'R32_5', homeSource: '1I', awaySource: '2B', position: 5 },
+  { id: 'R32_6', homeSource: '1E', awaySource: '3D_E_F', position: 6 },
+  { id: 'R32_7', homeSource: '1L', awaySource: '2D', position: 7 },
+  { id: 'R32_8', homeSource: '1G', awaySource: '3E_F_G_I', position: 8 },
+  // Right half
+  { id: 'R32_9', homeSource: '1D', awaySource: '3E_H_I_J', position: 9 },
+  { id: 'R32_10', homeSource: '2J', awaySource: '2L', position: 10 },
+  { id: 'R32_11', homeSource: '1K', awaySource: '2I', position: 11 },
+  { id: 'R32_12', homeSource: '1H', awaySource: '3I_J_K_L', position: 12 },
+  { id: 'R32_13', homeSource: '1B', awaySource: '2G', position: 13 },
+  { id: 'R32_14', homeSource: '1J', awaySource: '3H_J_K_L', position: 14 },
+  { id: 'R32_15', homeSource: '2K', awaySource: '2F', position: 15 },
+  { id: 'R32_16', homeSource: '2A', awaySource: '3B_E_H_K', position: 16 },
 ];
 
 // Simplified bracket: Round of 16 onward follows winner progression
