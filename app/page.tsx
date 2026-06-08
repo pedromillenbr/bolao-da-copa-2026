@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppStep, MatchResult } from '@/lib/types';
-import { saveBolao } from '@/lib/supabase';
-import { usePersistentState, clearPersistedBolao } from '@/lib/usePersistentState';
+import { upsertBolao, isSupabaseConfigured } from '@/lib/supabase';
+import { usePersistentState, clearPersistedBolao, getOrCreateBolaoId } from '@/lib/usePersistentState';
 import LandingPage from '@/components/LandingPage';
 import GroupStage from '@/components/GroupStage';
 import KnockoutStage from '@/components/KnockoutStage';
@@ -14,7 +14,10 @@ const STORAGE_KEYS = {
   name: 'bolao2026:name',
   groups: 'bolao2026:groupResults',
   knockout: 'bolao2026:knockoutResults',
+  id: 'bolao2026:id',
 };
+
+type CloudStatus = 'idle' | 'saving' | 'saved' | 'error' | 'off';
 
 export default function Home() {
   // Persisted to localStorage so progress survives reloads, closing the tab,
@@ -23,6 +26,32 @@ export default function Home() {
   const [name, setName] = usePersistentState<string>(STORAGE_KEYS.name, '');
   const [groupResults, setGroupResults] = usePersistentState<Record<string, MatchResult>>(STORAGE_KEYS.groups, {});
   const [knockoutResults, setKnockoutResults] = usePersistentState<Record<string, MatchResult>>(STORAGE_KEYS.knockout, {});
+
+  // Cloud (Supabase) auto-save status shown in the header.
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>('idle');
+  const bolaoIdRef = useRef<string>('');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced auto-save to Supabase. Fires ~1.2s after the last change so we
+  // don't hit the DB on every keystroke. localStorage already saved instantly;
+  // this adds durable cloud backup keyed by a stable per-browser id.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!isSupabaseConfigured()) { setCloudStatus('off'); return; }
+    // Nothing meaningful to save yet (no name and no palpites).
+    if (!name && Object.keys(groupResults).length === 0 && Object.keys(knockoutResults).length === 0) return;
+
+    if (!bolaoIdRef.current) bolaoIdRef.current = getOrCreateBolaoId(STORAGE_KEYS.id);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+
+    setCloudStatus('saving');
+    saveTimer.current = setTimeout(async () => {
+      const res = await upsertBolao(bolaoIdRef.current, name, groupResults, knockoutResults);
+      setCloudStatus(res.ok ? 'saved' : res.reason === 'not-configured' ? 'off' : 'error');
+    }, 1200);
+
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [name, groupResults, knockoutResults, hydrated]);
 
   const handleStart = (playerName: string) => {
     setName(playerName);
@@ -33,6 +62,8 @@ export default function Home() {
   const handleRestart = () => {
     if (!window.confirm('Tem certeza? Isso vai apagar todos os seus palpites e começar do zero.')) return;
     clearPersistedBolao(Object.values(STORAGE_KEYS));
+    bolaoIdRef.current = '';           // próximo save cria um registro novo
+    setCloudStatus('idle');
     setName('');
     setGroupResults({});
     setKnockoutResults({});
@@ -59,7 +90,8 @@ export default function Home() {
   };
 
   const handleSave = async () => {
-    await saveBolao(name, groupResults, knockoutResults);
+    if (!bolaoIdRef.current) bolaoIdRef.current = getOrCreateBolaoId(STORAGE_KEYS.id);
+    await upsertBolao(bolaoIdRef.current, name, groupResults, knockoutResults);
   };
 
   const handleBackToGroups = () => {
@@ -71,6 +103,15 @@ export default function Home() {
     setStep('knockout');
     window.scrollTo(0, 0);
   };
+
+  // Cloud-save status pill content (auto-save to Supabase).
+  const cloud = {
+    idle: null,
+    off: null, // sem credenciais: não polui a UI; localStorage cobre o usuário
+    saving: { text: 'Salvando…', color: '#a0b0a0' },
+    saved: { text: '☁ Salvo', color: 'var(--color-green-400)' },
+    error: { text: '⚠ Erro ao salvar', color: '#e0a050' },
+  }[cloudStatus];
 
   // Step header
   const renderHeader = () => {
@@ -93,6 +134,11 @@ export default function Home() {
             <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-card-bg)', color: '#a0b0a0' }}>
               {name}
             </span>
+            {cloud && (
+              <span className="text-xs px-2 py-0.5 rounded hidden sm:inline" style={{ color: cloud.color }}>
+                {cloud.text}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <div className="flex gap-1">

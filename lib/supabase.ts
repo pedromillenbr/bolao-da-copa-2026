@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { MatchResult } from './types';
 
 let supabase: SupabaseClient | null = null;
 
@@ -11,35 +12,49 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export async function saveBolao(
+// Whether Supabase credentials are present (so the UI can show status).
+export function isSupabaseConfigured(): boolean {
+  return getSupabase() !== null;
+}
+
+type Results = Record<string, MatchResult>;
+
+// Upsert a bolão: creates the row on first call, then updates that same row on
+// every subsequent call (keyed by the client-generated `id`). This is what
+// powers auto-save — each palpite updates the existing record instead of
+// inserting a duplicate.
+export async function upsertBolao(
+  id: string,
   name: string,
-  groupResults: Record<string, any>,
-  knockoutResults: Record<string, any>
+  groupResults: Results,
+  knockoutResults: Results
 ) {
   const client = getSupabase();
   if (!client) {
-    console.warn('Supabase não configurado. Bolão salvo apenas localmente.');
-    return { id: 'local', participant_name: name };
+    // No credentials configured — localStorage still has everything, so this
+    // is non-fatal. Surface it so callers/UI can reflect "not saved to cloud".
+    return { ok: false, reason: 'not-configured' as const };
   }
 
-  const { data, error } = await client
+  const { error } = await client
     .from('boloes')
-    .insert([
+    .upsert(
       {
+        id,
         participant_name: name,
         group_results: groupResults,
         knockout_results: knockoutResults,
-        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
-    ])
-    .select();
+      { onConflict: 'id' }
+    );
 
   if (error) {
-    console.error('Erro ao salvar bolão:', error);
-    return null;
+    console.error('Erro ao salvar bolão no Supabase:', error);
+    return { ok: false, reason: 'error' as const, error };
   }
 
-  return data?.[0];
+  return { ok: true as const, id };
 }
 
 export async function getBoloes() {
@@ -49,7 +64,7 @@ export async function getBoloes() {
   const { data, error } = await client
     .from('boloes')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('updated_at', { ascending: false });
 
   if (error) {
     console.error('Erro ao buscar bolões:', error);
